@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lottery Pool Tracker</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #eee;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1em;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .member {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .member-name {
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        .member-balance {
+            font-size: 1.2em;
+            font-weight: 700;
+        }
+        .paid { color: #10b981; }
+        .owes { color: #ef4444; }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+        .ticket {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .ticket-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .ticket-game {
+            font-weight: 700;
+            color: #667eea;
+            font-size: 1.1em;
+        }
+        .ticket-date {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .ticket-numbers {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            color: #333;
+            margin: 10px 0;
+        }
+        .jackpot-alert {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.2em;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎰 Lottery Pool Tracker</h1>
+        <p class="subtitle">Lotto Max & 649 | $30M+ Jackpots</p>
+
+        <div id="jackpotAlert"></div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('overview')">Overview</button>
+            <button class="tab" onclick="switchTab('tickets')">Tickets</button>
+            <button class="tab" onclick="switchTab('contribute')">Add Payment</button>
+            <button class="tab" onclick="switchTab('settings')">Settings</button>
+        </div>
+
+        <div id="overview" class="tab-content active">
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalPool">$0</div>
+                    <div class="stat-label">Pool Balance</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalTickets">0</div>
+                    <div class="stat-label">Tickets</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSpent">$0</div>
+                    <div class="stat-label">Total Spent</div>
+                </div>
+                <div class="stat-card" id="winningsCard" style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: white;">
+                    <div class="stat-value" id="winningsPool">$0</div>
+                    <div class="stat-label">Winnings Available</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 style="margin-bottom: 15px;">Pool Members</h2>
+                <div id="membersList"></div>
+            </div>
+        </div>
+
+        <div id="tickets" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Purchased Tickets</h2>
+                <button class="btn btn-primary" onclick="showAddTicket()">+ Add Ticket</button>
+            </div>
+            <div id="ticketsList"></div>
+            
+            <div id="addTicketForm" style="display: none;" class="card">
+                <h3 style="margin-bottom: 20px;">Add New Ticket</h3>
+                <div class="form-group">
+                    <label>Game</label>
+                    <select id="ticketGame">
+                        <option value="lotto-max">Lotto Max</option>
+                        <option value="649">Lotto 6/49</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Draw Date</label>
+                    <input type="date" id="ticketDate">
+                </div>
+                <div class="form-group">
+                    <label>Jackpot Amount</label>
+                    <input type="number" id="ticketJackpot" placeholder="30000000">
+                </div>
+                <div class="form-group">
+                    <label>Numbers (comma separated)</label>
+                    <input type="text" id="ticketNumbers" placeholder="5, 12, 23, 34, 41, 45, 49">
+                </div>
+                <div class="form-group">
+                    <label>Cost</label>
+                    <input type="number" id="ticketCost" placeholder="10">
+                </div>
+                <div class="form-group">
+                    <label>👥 Participants (uncheck to opt out)</label>
+                    <div id="ticketParticipants" style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 10px; padding: 10px; background: #f3f4f6; border-radius: 5px;">
+                        <span style="color: #666; font-size: 0.9em;">Click "Add Ticket" to see participants</span>
+                    </div>
+                    <small style="color: #666; display: block; margin-top: 5px;">Cost will be split only among checked members</small>
+                </div>
+                <button class="btn btn-primary" onclick="addTicket()">Save Ticket</button>
+                <button class="btn" onclick="hideAddTicket()" style="margin-left: 10px;">Cancel</button>
+            </div>
+        </div>
+
+        <div id="contribute" class="tab-content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Record Payment</h2>
+                <div class="form-group">
+                    <label>Member</label>
+                    <select id="paymentMember"></select>
+                </div>
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="number" id="paymentAmount" placeholder="10">
+                </div>
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="paymentDate">
+                </div>
+                <button class="btn btn-success" onclick="addPayment()">Record Payment</button>
+            </div>
+
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Payment History</h2>
+                <div id="paymentHistory"></div>
+            </div>
+        </div>
+
+        <div id="settings" class="tab-content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Pool Settings</h2>
+                <div class="form-group">
+                    <label>Jackpot Threshold</label>
+                    <input type="number" id="settingsThreshold" placeholder="30000000">
+                </div>
+                <div class="form-group">
+                    <label>Standard Contribution</label>
+                    <input type="number" id="settingsContribution" placeholder="10">
+                </div>
+                <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+            </div>
+
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Edit Members</h2>
+                <div id="membersEdit"></div>
+                <button class="btn btn-primary" onclick="addMember()" style="margin-top: 15px;">+ Add Member</button>
+            </div>
+
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Import/Export Data</h2>
+                <p style="color: #666; margin-bottom: 15px;">Keep your data synced between the web app and pool-data.json</p>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="syncFromFile(event)">
+                    <input type="file" id="fullSyncInput" accept=".json" style="display: none;" onchange="fullSyncFromFile(event)">
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">⬆️ Sync Tickets from File</button>
+                    <button class="btn" onclick="document.getElementById('fullSyncInput').click()" style="background: #8b5cf6; color: white;">📥 Load Full pool-data.json</button>
+                    <button class="btn btn-success" onclick="saveToFile()">💾 Save to pool-data.json</button>
+                    <button class="btn" onclick="exportData()" style="background: #6b7280; color: white;">📦 Export Backup</button>
+                    <button class="btn" onclick="reloadFromEmbedded()" style="background: #f59e0b; color: white;">🔄 Reload from Embedded Data</button>
+                </div>
+                
+                <div id="syncStatus" style="padding: 10px; border-radius: 5px; display: none; margin-top: 10px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let poolData = null;
+
+        // Data version for cache busting - increment when embedded data changes
+        const DATA_VERSION = '2026-03-28-v4';
+        let firebaseConnected = false;
+
+        // Load data
+        async function loadData() {
+            // Check if we need to bust cache
+            const savedVersion = localStorage.getItem('lotteryPoolDataVersion');
+            let useEmbedded = false;
+            
+            if (savedVersion !== DATA_VERSION) {
+                console.log('Data version changed, clearing cache...');
+                localStorage.removeItem('lotteryPoolData');
+                localStorage.setItem('lotteryPoolDataVersion', DATA_VERSION);
+                useEmbedded = true;
+            }
+
+            // Try Firebase first
+            const loadedFromFirebase = await loadFromFirebase();
+            if (loadedFromFirebase) {
+                listenToFirebase(); // Start listening for updates
+                return;
+            }
+
+            // Try localStorage (unless we just cleared it)
+            if (!useEmbedded) {
+                const saved = localStorage.getItem('lotteryPoolData');
+                if (saved) {
+                    try {
+                        poolData = JSON.parse(saved);
+                        updateUI();
+                        listenToFirebase(); // Still listen for Firebase updates
+                        return;
+                    } catch (e) {
+                        console.error('Error parsing saved data:', e);
+                    }
+                }
+            }
+
+            // Load default data
+            poolData = {
+                "settings": {
+                    "jackpotThreshold": 30000000,
+                    "games": ["lotto-max", "649"],
+                    "contributionAmount": 5,
+                    "currency": "CAD",
+                    "trackWinnings": true,
+                    "winningsUsage": "tickets"
+                },
+                "winnings": {
+                    "totalWon": 10,
+                    "totalClaimed": 20,
+                    "availableForTickets": 0,
+                    "history": [
+                        {
+                            "date": "2026-03-03",
+                            "game": "lotto-max",
+                            "type": "Free Play",
+                            "value": 5,
+                            "used": true,
+                            "usedFor": "ticket-1709764800000"
+                        },
+                        
+
+                        {
+                            "date": "2026-03-20",
+                            "game": "lotto-max",
+                            "type": "Free Play",
+                            "value": 5,
+                            "used": true,
+                            "usedFor": "ticket-1710982800000"
+                        },
+                    ]
+                },
+                "members": [
+                    {
+                        "id": "joe",
+                        "name": "Joe",
+                        "contact": "telegram:8474207259",
+                        "active": true
+                    },
+                    {
+                        "id": "member2",
+                        "name": "Jess",
+                        "contact": "",
+                        "active": true
+                    },
+                    {
+                        "id": "member3",
+                        "name": "Kenji",
+                        "contact": "",
+                        "active": true
+                    }
+                ],
+                "draws": [
+                    {
+                        "date": "2026-03-31",
+                        "game": "lotto-max",
+                        "jackpot": 65000000,
+                        "maxmillions": 8,
+                        "checked": false
+                    },
+                    {
+                        "date": "2026-03-28",
+                        "game": "649",
+                        "jackpot": 18000000,
+                        "goldBall": true,
+                        "superdraw": true,
+                        "checked": false
+                    }
+                ],
+                "contributions": [
+                    {
+                        "id": "1772697359547",
+                        "memberId": "joe",
+                        "amount": 5,
+                        "date": "2026-03-03",
+                        "timestamp": "2026-03-05T07:55:59.547Z"
+                    },
+                    {
+                        "id": "1772697372152",
+                        "memberId": "member2",
+                        "amount": 100,
+                        "date": "2026-03-03",
+                        "timestamp": "2026-03-05T07:56:12.152Z"
+                    },
+                    {
+                        "id": "1772697381552",
+                        "memberId": "member3",
+                        "amount": 5,
+                        "date": "2026-03-03",
+                        "timestamp": "2026-03-05T07:56:21.552Z"
+                    },
+                    {
+                        "id": "1773173715435",
+                        "memberId": "joe",
+                        "amount": 3,
+                        "date": "2026-03-09",
+                        "timestamp": "2026-03-10T20:15:15.435Z"
+                    },
+                    {
+                        "id": "1773173725715",
+                        "memberId": "member3",
+                        "amount": 3,
+                        "date": "2026-03-09",
+                        "timestamp": "2026-03-10T20:15:25.715Z"
+                    },
+                    {
+                        "id": "1710278460000",
+                        "memberId": "joe",
+                        "amount": 5,
+                        "date": "2026-03-12",
+                        "timestamp": "2026-03-12T20:31:00.000Z"
+                    },
+                    {
+                        "id": "1710532800000",
+                        "memberId": "member3",
+                        "amount": 5,
+                        "date": "2026-03-15",
+                        "timestamp": "2026-03-15T21:20:00.000Z",
+                        "note": "Kenji payment - caught up"
+                    },
+                    {
+                        "id": "1711350000000",
+                        "memberId": "joe",
+                        "amount": 11.67,
+                        "date": "2026-03-25",
+                        "timestamp": "2026-03-25T04:00:00.000Z",
+                        "note": "Catch up payment"
+                    },
+                    {
+                        "id": "1714572000000",
+                        "memberId": "member3",
+                        "amount": 16.67,
+                        "date": "2026-03-26",
+                        "timestamp": "2026-03-26T21:38:00.000Z",
+                        "note": "Kenji catch up payment"
+                    },
+                    {
+                        "id": "1714572000001",
+                        "memberId": "joe",
+                        "amount": 5,
+                        "date": "2026-03-26",
+                        "timestamp": "2026-03-26T22:00:00.000Z",
+                        "note": "Joe catch up payment"
+                    }
+                ],
+                "tickets": [
+                    {
+                        "id": "1709505600000",
+                        "game": "lotto-max",
+                        "drawDate": "2026-03-03",
+                        "jackpot": 75000000,
+                        "cost": 15.00,
+                        "purchaseDate": "2026-02-17T21:00:00.000Z",
+                        "winningNumbers": [1, 3, 4, 18, 20, 23, 31],
+                        "bonusNumber": 2,
+                        "checked": true,
+                        "won": true,
+                        "prizeAmount": 5,
+                        "prizeType": "Free Play (3 sets)",
+                        "lines": [
+                            [24, 26, 28, 32, 39, 40, 48],
+                            [5, 7, 16, 18, 20, 23, 36],
+                            [6, 13, 15, 24, 33, 36, 37],
+                            [8, 9, 11, 13, 23, 30, 37],
+                            [13, 21, 28, 29, 34, 46, 48],
+                            [25, 27, 29, 31, 32, 33, 45],
+                            [5, 8, 16, 17, 37, 38, 46],
+                            [9, 13, 19, 24, 25, 35, 49],
+                            [7, 8, 18, 23, 32, 36, 49]
+                        ]
+                    },
+                    {
+                        "id": "1709764800000",
+                        "game": "lotto-max",
+                        "drawDate": "2026-03-06",
+                        "jackpot": 20000000,
+                        "cost": 0.00,
+                        "purchaseDate": "2026-03-05T01:53:10.000Z",
+                        "freePlay": true,
+                        "winningNumbers": [3, 6, 12, 21, 28, 35, 41],
+                        "bonusNumber": 47,
+                        "checked": true,
+                        "won": false,
+                        "lines": [
+                            [23, 28, 31, 33, 38, 39, 45],
+                            [2, 5, 12, 15, 27, 33, 48],
+                            [6, 10, 16, 17, 24, 25, 32]
+                        ]
+                    },
+                    {
+                        "id": "1710115200000",
+                        "game": "649",
+                        "drawDate": "2026-03-11",
+                        "jackpot": 44000000,
+                        "cost": 9.00,
+                        "purchaseDate": "2026-03-10T02:53:33.000Z",
+                        "goldBall": true,
+                        "goldBallRange": "51015955-01 to 51015955-03",
+                        "winningNumbers": [5, 6, 8, 14, 16, 39],
+                        "bonusNumber": 11,
+                        "goldBallWinner": "51022818-01",
+                        "checked": true,
+                        "won": false,
+                        "lines": [
+                            [9, 12, 15, 21, 33, 38],
+                            [7, 21, 22, 36, 44, 48],
+                            [4, 11, 16, 33, 38, 43]
+                        ]
+                    },
+                    {
+                        "id": "1710374400000",
+                        "game": "lotto-max",
+                        "drawDate": "2026-03-13",
+                        "jackpot": 30000000,
+                        "cost": 15.00,
+                        "purchaseDate": "2026-03-12T19:54:00.000Z",
+                        "ticketNumber": "367575783",
+                        "winningNumbers": [6, 7, 23, 25, 29, 30, 38],
+                        "bonusNumber": 31,
+                        "checked": true,
+                        "won": false,
+                        "lines": [
+                            [1, 18, 25, 31, 33, 47, 48],
+                            [3, 17, 23, 35, 39, 44, 47],
+                            [7, 13, 19, 22, 24, 26, 33],
+                            [1, 5, 12, 14, 18, 43, 45],
+                            [3, 15, 19, 31, 39, 45, 46],
+                            [2, 3, 7, 16, 20, 43, 50],
+                            [10, 21, 23, 31, 35, 38, 43],
+                            [2, 4, 12, 26, 32, 44, 47],
+                            [4, 11, 32, 34, 35, 44, 49]
+                        ]
+                    },
+                    {
+                        "id": "1710715200000",
+                        "game": "lotto-max",
+                        "drawDate": "2026-03-17",
+                        "jackpot": 40000000,
+                        "cost": 5.00,
+                        "purchaseDate": "2026-03-17T22:11:00.000Z",
+                        "ticketNumber": "368498528",
+                        "fundedBy": "contributions",
+                        "winningNumbers": [7, 10, 24, 25, 34, 45, 49],
+                        "bonusNumber": 44,
+                        "checked": true,
+                        "won": false,
+                        "lines": [
+                            [8, 14, 21, 23, 35, 39, 41],
+                            [2, 3, 9, 24, 37, 46, 50],
+                            [9, 11, 12, 18, 20, 31, 32]
+                        ]
+                    },
+                    {
+                        "id": "1710982800000",
+                        "game": "lotto-max",
+                        "drawDate": "2026-03-20",
+                        "jackpot": 50000000,
+                        "cost": 15.00,
+                        "purchaseDate": "2026-03-19T20:24:00.000Z",
+                        "ticketNumber": "17294-5625-8884-2110-32578",
+                        "fundedBy": "contributions",
+                        "winningNumbers": [2, 14, 25, 31, 36, 41, 47],
+                        "bonusNumber": 13,
+                        "checked": true,
+                        "won": true,
+                        "prizeAmount": 5,
+                        "prizeType": "3/7 Match - Free Play",
+                        "lines": [
+                            [2, 7, 8, 15, 28, 35, 49],
+                            [4, 11, 12, 19, 30, 41, 45],
+                            [6, 13, 18, 22, 33, 38, 47],
+                            [3, 9, 14, 25, 31, 36, 44],
+                            [5, 10, 16, 21, 29, 37, 48],
+                            [1, 8, 17, 23, 32, 39, 46],
+                            [7, 12, 20, 26, 34, 40, 50],
+                            [9, 15, 19, 27, 35, 42, 49],
+                            [11, 18, 24, 30, 38, 45, 48]
+                        ]
+                    },
+                    {
+                        "id": "1711254000000",
+                        "game": "lotto-max",
+                        "drawDate": "2026-03-24",
+                        "jackpot": 55000000,
+                        "cost": 15.00,
+                        "purchaseDate": "2026-03-22T22:24:00.000Z",
+                        "ticketNumber": "369625664",
+                        "fundedBy": "contributions",
+                        "winningNumbers": [6, 11, 32, 33, 34, 39, 49],
+                        "bonusNumber": 45,
+                        "checked": true,
+                        "won": false,
+                        "lines": [
+                            [3, 8, 10, 28, 31, 46, 50],
+                            [1, 5, 20, 26, 27, 29, 40],
+                            [12, 15, 18, 23, 43, 47, 48],
+                            [6, 12, 25, 39, 41, 43, 45],
+                            [11, 15, 29, 32, 45, 46, 50],
+                            [14, 18, 26, 27, 32, 41, 43],
+                            [1, 11, 16, 23, 29, 40, 44],
+                            [8, 25, 30, 31, 32, 42, 50],
+                            [2, 4, 9, 27, 36, 40, 41]
+                        ]
+                    },
+                    {
+                        "id": "1712803200000",
+                        "game": "lotto-max",
+                        "drawDate": "2026-03-24",
+                        "jackpot": 55000000,
+                        "cost": 0,
+                        "purchaseDate": "2026-03-24T23:07:00.000Z",
+                        "ticketNumber": "17299-5757-7989-2133-06293",
+                        "freePlay": true,
+                        "winningNumbers": [6, 11, 32, 33, 34, 39, 49],
+                        "bonusNumber": 45,
+                        "checked": true,
+                        "won": false,
+                        "lines": [
+                            [7, 11, 15, 17, 32, 36, 38],
+                            [2, 3, 6, 9, 22, 23, 49],
+                            [7, 23, 38, 40, 41, 48, 49]
+                        ]
+                    },
+                    {
+                        "id": "1713048000000",
+                        "game": "lotto-max",
+                        "drawDate": "2026-03-27",
+                        "jackpot": 60000000,
+                        "cost": 15,
+                        "purchaseDate": "2026-03-26T18:37:00.000Z",
+                        "ticketNumber": "17301-5017-6871-2195-07585",
+                        "fundedBy": "contributions",
+                        "winningNumbers": [5, 34, 37, 38, 48, 49, 50],
+                        "bonusNumber": 9,
+                        "checked": true,
+                        "won": false,
+                        "lines": [
+                            [4, 15, 19, 21, 30, 44, 49],
+                            [1, 9, 12, 22, 32, 39, 43],
+                            [10, 14, 23, 35, 44, 47, 48],
+                            [13, 17, 28, 34, 35, 38, 39],
+                            [3, 21, 22, 32, 33, 35, 36],
+                            [7, 12, 23, 33, 34, 38, 45],
+                            [9, 19, 21, 30, 40, 45, 50],
+                            [6, 21, 28, 29, 32, 41, 47],
+                            [6, 7, 15, 17, 20, 38, 43]
+                        ]
+                    }
+                ]
+            };
+            updateUI();
+        }
+
+        function updateUI() {
+            updateOverview();
+            updateTickets();
+            updateContributeForm();
+            updateSettings();
+        }
+
+        function updateOverview() {
+            // Calculate balances with participant support
+            const balances = {};
+            poolData.members.forEach(m => balances[m.id] = 0);
+            
+            poolData.contributions.forEach(c => {
+                balances[c.memberId] += c.amount;
+            });
+            
+            poolData.tickets.forEach(t => {
+                // Skip tickets funded by winnings or free play - they don't affect member balances
+                if (t.fundedBy === 'winnings' || t.freePlay) return;
+                
+                // Check if ticket has specific participants
+                if (t.participants && t.participants.length > 0) {
+                    const costPerParticipant = t.cost / t.participants.length;
+                    t.participants.forEach(memberId => {
+                        if (balances[memberId] !== undefined) {
+                            balances[memberId] -= costPerParticipant;
+                        }
+                    });
+                } else {
+                    // Legacy: split among all active members
+                    const perPerson = t.cost / poolData.members.filter(m => m.active).length;
+                    poolData.members.filter(m => m.active).forEach(m => {
+                        balances[m.id] -= perPerson;
+                    });
+                }
+            });
+
+            // Update stats
+            const totalBalance = Object.values(balances).reduce((sum, b) => sum + b, 0);
+            document.getElementById('totalPool').textContent = '$' + totalBalance.toFixed(2);
+            document.getElementById('totalTickets').textContent = poolData.tickets.length;
+            
+            // Calculate total spent from contributions vs winnings
+            const totalSpent = poolData.tickets.reduce((sum, t) => sum + t.cost, 0);
+            const spentFromContributions = poolData.tickets
+                .filter(t => t.fundedBy !== 'winnings' && !t.freePlay)
+                .reduce((sum, t) => sum + t.cost, 0);
+            const spentFromWinnings = poolData.tickets
+                .filter(t => t.fundedBy === 'winnings')
+                .reduce((sum, t) => sum + t.cost, 0);
+            document.getElementById('totalSpent').textContent = '$' + totalSpent.toFixed(2);
+            document.getElementById('totalSpent').title = `From contributions: $${spentFromContributions.toFixed(2)} | From winnings: $${spentFromWinnings.toFixed(2)}`;
+            
+            // Update winnings pool
+            const winningsAvailable = poolData.winnings ? poolData.winnings.availableForTickets : 0;
+            document.getElementById('winningsPool').textContent = '$' + winningsAvailable.toFixed(2);
+            document.getElementById('winningsCard').style.display = poolData.winnings ? 'block' : 'none';
+
+            // Update members list
+            const membersList = document.getElementById('membersList');
+            membersList.innerHTML = poolData.members.map(m => {
+                const balance = balances[m.id];
+                const balanceClass = balance >= 0 ? 'paid' : 'owes';
+                const balanceText = balance >= 0 ? `+$${balance.toFixed(2)}` : `-$${Math.abs(balance).toFixed(2)}`;
+                return `
+                    <div class="member">
+                        <div class="member-name">${m.name}</div>
+                        <div class="member-balance ${balanceClass}">${balanceText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateTickets() {
+            const ticketsList = document.getElementById('ticketsList');
+            if (poolData.tickets.length === 0) {
+                ticketsList.innerHTML = '<p style="text-align: center; color: #666;">No tickets purchased yet.</p>';
+                return;
+            }
+
+            ticketsList.innerHTML = poolData.tickets.map(t => {
+                let numbersDisplay = '';
+                if (t.lines && Array.isArray(t.lines)) {
+                    // Multi-line ticket
+                    numbersDisplay = t.lines.map((line, i) => 
+                        `<div style="margin: 5px 0; font-size: 0.95em;"><strong>Line ${i+1}:</strong> ${line.join(' - ')}</div>`
+                    ).join('');
+                } else if (t.numbers) {
+                    // Single line ticket
+                    numbersDisplay = `<div class="ticket-numbers">${t.numbers.join(' - ')}</div>`;
+                }
+                
+                // Check if ticket has been validated
+                let statusDisplay = '';
+                if (t.checked && t.winningNumbers) {
+                    const winningDisplay = `<div style="margin-top: 10px; padding: 10px; background: #f3f4f6; border-radius: 5px;">
+                        <strong>Winning Numbers:</strong> ${t.winningNumbers.join(' - ')}${t.bonusNumber ? ` (Bonus: ${t.bonusNumber})` : ''}
+                    </div>`;
+                    
+                    let resultBadge = '';
+                    if (t.won) {
+                        const prizeInfo = t.prizeType ? ` - ${t.prizeType}` : (t.prizeAmount ? ` - $${t.prizeAmount.toFixed(2)}` : '');
+                        resultBadge = `<div style="margin-top: 10px; padding: 8px; background: #10b981; color: white; border-radius: 5px; text-align: center; font-weight: bold;">🎉 WINNER!${prizeInfo} 🎉</div>`;
+                    } else {
+                        resultBadge = `<div style="margin-top: 10px; padding: 8px; background: #ef4444; color: white; border-radius: 5px; text-align: center;">❌ No Win</div>`;
+                    }
+                    
+                    statusDisplay = winningDisplay + resultBadge;
+                } else if (new Date(t.drawDate) < new Date()) {
+                    statusDisplay = `<div style="margin-top: 10px; padding: 8px; background: #fbbf24; color: #78350f; border-radius: 5px; text-align: center;">⏳ Awaiting Results</div>`;
+                }
+                
+                const goldBallBadge = t.goldBall ? ' <span style="background: #fbbf24; color: #78350f; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: bold;">⚡ GOLD BALL</span>' : '';
+                const winningsBadge = t.fundedBy === 'winnings' ? ' <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: bold;">💰 WINNINGS</span>' : '';
+                
+                // Show participants if specified
+                let participantsDisplay = '';
+                if (t.participants && t.participants.length > 0) {
+                    const participantNames = t.participants.map(id => {
+                        const m = poolData.members.find(mem => mem.id === id);
+                        return m ? m.name : id;
+                    }).join(', ');
+                    participantsDisplay = `<div style="margin-top: 5px; font-size: 0.85em; color: #666;">👥 Participants: ${participantNames}</div>`;
+                }
+                
+                return `
+                    <div class="ticket">
+                        <div class="ticket-header">
+                            <div class="ticket-game">${t.game === 'lotto-max' ? 'Lotto Max' : 'Lotto 6/49'}${goldBallBadge}${winningsBadge}</div>
+                            <div class="ticket-date">${t.drawDate}</div>
+                        </div>
+                        ${numbersDisplay}
+                        ${statusDisplay}
+                        ${participantsDisplay}
+                        <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                            <div>Jackpot: $${(t.jackpot / 1000000).toFixed(1)}M</div>
+                            <div>Cost: ${t.freePlay ? 'FREE PLAY' : t.fundedBy === 'winnings' ? '💰 $' + t.cost.toFixed(2) + ' (Winnings)' : '$' + t.cost.toFixed(2)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateContributeForm() {
+            const select = document.getElementById('paymentMember');
+            select.innerHTML = poolData.members.map(m => 
+                `<option value="${m.id}">${m.name}</option>`
+            ).join('');
+            
+            document.getElementById('paymentDate').valueAsDate = new Date();
+            document.getElementById('paymentAmount').value = poolData.settings.contributionAmount;
+            
+            // Update payment history
+            const historyDiv = document.getElementById('paymentHistory');
+            if (poolData.contributions.length === 0) {
+                historyDiv.innerHTML = '<p style="text-align: center; color: #666;">No payments recorded yet.</p>';
+            } else {
+                // Sort by date, newest first
+                const sorted = [...poolData.contributions].sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                historyDiv.innerHTML = sorted.map(c => {
+                    const member = poolData.members.find(m => m.id === c.memberId);
+                    const memberName = member ? member.name : c.memberId;
+                    return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px;">
+                            <div>
+                                <strong>${memberName}</strong> - $${c.amount.toFixed(2)}
+                                <div style="font-size: 0.85em; color: #666;">${new Date(c.date).toLocaleDateString()}</div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn" onclick="editPayment('${c.id}')" style="background: #667eea; color: white; padding: 5px 12px; font-size: 0.85em;">Edit</button>
+                                <button class="btn" onclick="deletePayment('${c.id}')" style="background: #ef4444; color: white; padding: 5px 12px; font-size: 0.85em;">Delete</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function updateSettings() {
+            document.getElementById('settingsThreshold').value = poolData.settings.jackpotThreshold;
+            document.getElementById('settingsContribution').value = poolData.settings.contributionAmount;
+
+            const membersEdit = document.getElementById('membersEdit');
+            membersEdit.innerHTML = poolData.members.map((m, i) => `
+                <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <label>Member ${i + 1}</label>
+                        <input type="text" id="memberName${i}" value="${m.name}" placeholder="Name">
+                        <input type="text" id="memberContact${i}" value="${m.contact}" placeholder="Contact (optional)">
+                    </div>
+                    ${poolData.members.length > 1 ? `<button class="btn btn-danger" onclick="removeMember(${i})" style="margin-top: 28px; padding: 8px 16px;">Remove</button>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function addMember() {
+            const newId = 'member' + Date.now();
+            poolData.members.push({
+                id: newId,
+                name: 'New Member',
+                contact: '',
+                active: true
+            });
+            updateSettings();
+            alert('Member added! Update their name and contact, then click Save Settings.');
+        }
+
+        function removeMember(index) {
+            if (poolData.members.length <= 1) {
+                alert('Cannot remove the last member!');
+                return;
+            }
+            const member = poolData.members[index];
+            if (confirm(`Remove ${member.name} from the pool?`)) {
+                poolData.members.splice(index, 1);
+                updateSettings();
+                alert('Member removed! Click Save Settings to confirm.');
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        function showAddTicket() {
+            document.getElementById('addTicketForm').style.display = 'block';
+            document.getElementById('ticketDate').valueAsDate = new Date();
+            
+            // Populate participants checkboxes
+            const participantsDiv = document.getElementById('ticketParticipants');
+            participantsDiv.innerHTML = poolData.members
+                .filter(m => m.active)
+                .map(m => `
+                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                        <input type="checkbox" name="ticketParticipant" value="${m.id}" checked>
+                        ${m.name}
+                    </label>
+                `).join('');
+        }
+
+        function hideAddTicket() {
+            document.getElementById('addTicketForm').style.display = 'none';
+        }
+
+        function addTicket() {
+            // Get selected participants
+            const participantCheckboxes = document.querySelectorAll('input[name="ticketParticipant"]:checked');
+            const participants = Array.from(participantCheckboxes).map(cb => cb.value);
+            
+            const ticket = {
+                id: Date.now().toString(),
+                game: document.getElementById('ticketGame').value,
+                drawDate: document.getElementById('ticketDate').value,
+                jackpot: parseInt(document.getElementById('ticketJackpot').value),
+                numbers: document.getElementById('ticketNumbers').value.split(',').map(n => parseInt(n.trim())),
+                cost: parseFloat(document.getElementById('ticketCost').value),
+                purchaseDate: new Date().toISOString()
+            };
+            
+            // Only add participants if not all members are selected
+            const allMemberIds = poolData.members.filter(m => m.active).map(m => m.id);
+            if (participants.length > 0 && participants.length < allMemberIds.length) {
+                ticket.participants = participants;
+            }
+
+            poolData.tickets.push(ticket);
+            saveData();
+            hideAddTicket();
+            updateUI();
+            alert('Ticket added! Remember to save pool-data.json');
+        }
+
+        function addPayment() {
+            const payment = {
+                id: Date.now().toString(),
+                memberId: document.getElementById('paymentMember').value,
+                amount: parseFloat(document.getElementById('paymentAmount').value),
+                date: document.getElementById('paymentDate').value,
+                timestamp: new Date().toISOString()
+            };
+
+            poolData.contributions.push(payment);
+            saveData();
+            updateUI();
+            alert('Payment recorded! Remember to save pool-data.json');
+        }
+
+        function editPayment(paymentId) {
+            const payment = poolData.contributions.find(c => c.id === paymentId);
+            if (!payment) return;
+            
+            const newAmount = prompt(`Edit payment amount for ${poolData.members.find(m => m.id === payment.memberId)?.name || payment.memberId}:`, payment.amount);
+            if (newAmount === null) return; // User cancelled
+            
+            const amount = parseFloat(newAmount);
+            if (isNaN(amount) || amount <= 0) {
+                alert('Please enter a valid positive number');
+                return;
+            }
+            
+            payment.amount = amount;
+            saveData();
+            updateUI();
+            alert('Payment updated! Remember to save pool-data.json');
+        }
+
+        function deletePayment(paymentId) {
+            const payment = poolData.contributions.find(c => c.id === paymentId);
+            if (!payment) return;
+            
+            const member = poolData.members.find(m => m.id === payment.memberId);
+            const memberName = member ? member.name : payment.memberId;
+            
+            if (!confirm(`Delete $${payment.amount.toFixed(2)} payment from ${memberName} on ${new Date(payment.date).toLocaleDateString()}?`)) {
+                return;
+            }
+            
+            poolData.contributions = poolData.contributions.filter(c => c.id !== paymentId);
+            saveData();
+            updateUI();
+            alert('Payment deleted! Remember to save pool-data.json');
+        }
+
+        function saveSettings() {
+            poolData.settings.jackpotThreshold = parseInt(document.getElementById('settingsThreshold').value);
+            poolData.settings.contributionAmount = parseFloat(document.getElementById('settingsContribution').value);
+
+            poolData.members.forEach((m, i) => {
+                m.name = document.getElementById(`memberName${i}`).value;
+                m.contact = document.getElementById(`memberContact${i}`).value;
+            });
+
+            saveData();
+            alert('Settings saved! Remember to save pool-data.json');
+        }
+
+        function saveData() {
+            // Save to localStorage
+            localStorage.setItem('lotteryPoolData', JSON.stringify(poolData));
+            console.log('Data saved to browser localStorage');
+            
+            // Also save to Firebase if available
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                db.collection('lotteryPool').doc('main').set(poolData)
+                    .then(() => console.log('Data saved to Firebase'))
+                    .catch(err => console.error('Firebase save error:', err));
+            }
+        }
+        
+        // Load data from Firebase
+        async function loadFromFirebase() {
+            if (typeof firebase === 'undefined' || !firebase.firestore) {
+                console.log('Firebase not available');
+                return false;
+            }
+            
+            console.log('Attempting to load from Firebase...');
+            try {
+                const db = firebase.firestore();
+                const doc = await db.collection('lotteryPool').doc('main').get();
+                console.log('Firebase doc exists:', doc.exists);
+                if (doc.exists) {
+                    poolData = doc.data();
+                    // Also save to localStorage for offline use
+                    localStorage.setItem('lotteryPoolData', JSON.stringify(poolData));
+                    localStorage.setItem('lotteryPoolDataVersion', DATA_VERSION);
+                    updateUI();
+                    firebaseConnected = true;
+                    console.log('Data loaded from Firebase');
+                    return true;
+                } else {
+                    console.log('No data in Firebase yet, will use local data');
+                }
+            } catch (err) {
+                console.error('Firebase load error:', err);
+            }
+            return false;
+        }
+        
+        // Listen for real-time updates from Firebase
+        function listenToFirebase() {
+            if (typeof firebase === 'undefined' || !firebase.firestore) {
+                return;
+            }
+            
+            const db = firebase.firestore();
+            db.collection('lotteryPool').doc('main').onSnapshot((doc) => {
+                if (doc.exists) {
+                    const newData = doc.data();
+                    // Only update if data changed (avoid loops)
+                    if (JSON.stringify(newData) !== JSON.stringify(poolData)) {
+                        poolData = newData;
+                        localStorage.setItem('lotteryPoolData', JSON.stringify(poolData));
+                        updateUI();
+                        console.log('Data updated from Firebase');
+                    }
+                }
+            }, (err) => {
+                console.error('Firebase listener error:', err);
+            });
+        }
+
+        function syncFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const fileData = JSON.parse(e.target.result);
+                    
+                    // Merge tickets from file into current data
+                    const existingIds = new Set(poolData.tickets.map(t => t.id));
+                    let newCount = 0;
+                    
+                    fileData.tickets.forEach(ticket => {
+                        if (!existingIds.has(ticket.id)) {
+                            poolData.tickets.push(ticket);
+                            newCount++;
+                        }
+                    });
+                    
+                    // Sort tickets by draw date
+                    poolData.tickets.sort((a, b) => new Date(a.drawDate) - new Date(b.drawDate));
+                    
+                    saveData();
+                    updateUI();
+                    
+                    const status = document.getElementById('syncStatus');
+                    status.style.display = 'block';
+                    status.style.background = '#10b981';
+                    status.style.color = 'white';
+                    status.innerHTML = `✓ Sync complete! Added ${newCount} new ticket(s). Your members and payments are preserved.`;
+                    
+                    setTimeout(() => { status.style.display = 'none'; }, 5000);
+                } catch (error) {
+                    const status = document.getElementById('syncStatus');
+                    status.style.display = 'block';
+                    status.style.background = '#ef4444';
+                    status.style.color = 'white';
+                    status.innerHTML = `✗ Error parsing file. Make sure it's a valid pool-data.json file.`;
+                    console.error('Sync error:', error);
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function saveToFile() {
+            const dataStr = JSON.stringify(poolData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'pool-data.json';
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            
+            const status = document.getElementById('syncStatus');
+            status.style.display = 'block';
+            status.style.background = '#667eea';
+            status.style.color = 'white';
+            status.innerHTML = '💾 Downloaded pool-data.json! <strong>Replace the existing file</strong> at:<br>/Users/joe/.openclaw/agents/mikuru/workspace/lottery-pool/pool-data.json';
+            
+            setTimeout(() => { status.style.display = 'none'; }, 8000);
+        }
+
+        function exportData() {
+            const dataStr = JSON.stringify(poolData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `lottery-pool-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            
+            const status = document.getElementById('syncStatus');
+            status.style.display = 'block';
+            status.style.background = '#10b981';
+            status.style.color = 'white';
+            status.innerHTML = '✓ Backup exported! Check your Downloads folder.';
+            
+            setTimeout(() => { status.style.display = 'none'; }, 3000);
+        }
+
+        function fullSyncFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!confirm('This will REPLACE all your current data with the file contents. Continue?')) {
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const fileData = JSON.parse(e.target.result);
+                    
+                    // Validate required fields
+                    if (!fileData.members || !fileData.contributions || !fileData.tickets) {
+                        throw new Error('Invalid pool-data.json format');
+                    }
+                    
+                    // Replace all data
+                    poolData = fileData;
+                    saveData();
+                    updateUI();
+                    
+                    const status = document.getElementById('syncStatus');
+                    status.style.display = 'block';
+                    status.style.background = '#10b981';
+                    status.style.color = 'white';
+                    status.innerHTML = '✓ Full sync complete! All data replaced from file.';
+                    
+                    setTimeout(() => { status.style.display = 'none'; }, 5000);
+                } catch (error) {
+                    const status = document.getElementById('syncStatus');
+                    status.style.display = 'block';
+                    status.style.background = '#ef4444';
+                    status.style.color = 'white';
+                    status.innerHTML = '✗ Error: ' + error.message;
+                    console.error('Full sync error:', error);
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function reloadFromEmbedded() {
+            if (confirm('This will clear your browser cache and reload the embedded data from the HTML file. Any unsaved changes will be lost. Continue?')) {
+                localStorage.removeItem('lotteryPoolData');
+                location.reload();
+            }
+        }
+
+        // Load on start
+        // Initialize
+        (async function() {
+            console.log('Initializing app...');
+            console.log('Firebase available:', typeof firebase !== 'undefined');
+            if (typeof firebase !== 'undefined') {
+                console.log('Firestore available:', typeof firebase.firestore !== 'undefined');
+            }
+            await loadData();
+            listenToFirebase();
+            console.log('Initialization complete');
+        })();
+    </script>
+</body>
+</html>
