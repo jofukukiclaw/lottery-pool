@@ -328,17 +328,11 @@
             </div>
 
             <div class="card">
-                <h2 style="margin-bottom: 20px;">Import/Export Data</h2>
-                <p style="color: #666; margin-bottom: 15px;">Keep your data synced between the web app and pool-data.json</p>
+                <h2 style="margin-bottom: 20px;">Data Backup</h2>
+                <p style="color: #666; margin-bottom: 15px;">Download a backup of your pool data</p>
                 
                 <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-                    <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="syncFromFile(event)">
-                    <input type="file" id="fullSyncInput" accept=".json" style="display: none;" onchange="fullSyncFromFile(event)">
-                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">⬆️ Sync Tickets from File</button>
-                    <button class="btn" onclick="document.getElementById('fullSyncInput').click()" style="background: #8b5cf6; color: white;">📥 Load Full pool-data.json</button>
-                    <button class="btn btn-success" onclick="saveToFile()">💾 Save to pool-data.json</button>
                     <button class="btn" onclick="exportData()" style="background: #6b7280; color: white;">📦 Export Backup</button>
-                    <button class="btn" onclick="reloadFromEmbedded()" style="background: #f59e0b; color: white;">🔄 Reload from Embedded Data</button>
                 </div>
                 
                 <div id="syncStatus" style="padding: 10px; border-radius: 5px; display: none; margin-top: 10px;"></div>
@@ -346,48 +340,13 @@
         </div>
     </div>
 
-    <!-- Password Protection Overlay -->
-    <div id="passwordOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(102, 126, 234, 0.95); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white;">
-        <h2 style="margin-bottom: 20px;">🔒 Lottery Pool Tracker</h2>
-        <p style="margin-bottom: 20px;">Enter password to enable editing</p>
-        <input type="password" id="passwordInput" placeholder="Password" style="padding: 10px; border-radius: 5px; border: none; margin-bottom: 10px; width: 200px; text-align: center;">
-        <button onclick="checkPassword()" style="padding: 10px 20px; background: white; color: #667eea; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Unlock</button>
-        <button onclick="viewOnly()" style="padding: 10px 20px; background: transparent; color: white; border: 1px solid white; border-radius: 5px; cursor: pointer; margin-top: 10px;">View Only</button>
-        <p id="passwordError" style="color: #ff6b6b; margin-top: 10px; display: none;">Incorrect password</p>
-    </div>
-
     <script>
         let poolData = null;
-        let canEdit = false;
-        const SECRET_PASSWORD = 'pool2026'; // Change this to your password
+        let canEdit = true; // Always allow editing
 
         // Data version for cache busting - increment when embedded data changes
         const DATA_VERSION = '2026-03-28-v5';
         let firebaseConnected = false;
-
-        function checkPassword() {
-            const input = document.getElementById('passwordInput').value;
-            if (input === SECRET_PASSWORD) {
-                canEdit = true;
-                document.getElementById('passwordOverlay').style.display = 'none';
-                updateUI(); // Refresh to enable editing
-            } else {
-                document.getElementById('passwordError').style.display = 'block';
-            }
-        }
-
-        function viewOnly() {
-            canEdit = false;
-            document.getElementById('passwordOverlay').style.display = 'none';
-            // Disable all edit buttons
-            document.querySelectorAll('.btn-primary, .btn-success').forEach(btn => {
-                if (!btn.onclick || !btn.onclick.toString().includes('switchTab')) {
-                    btn.disabled = true;
-                    btn.style.opacity = '0.5';
-                    btn.style.cursor = 'not-allowed';
-                }
-            });
-        }
 
         // Load data
         async function loadData() {
@@ -1122,11 +1081,6 @@
         }
 
         function saveData() {
-            if (!canEdit) {
-                alert('View-only mode. Enter password to make changes.');
-                return;
-            }
-            
             // Save to localStorage
             localStorage.setItem('lotteryPoolData', JSON.stringify(poolData));
             console.log('Data saved to browser localStorage');
@@ -1134,7 +1088,18 @@
             // Also save to Firebase if available
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                db.collection('lotteryPool').doc('main').set(poolData)
+                // Convert nested arrays to objects for Firebase compatibility
+                const firebaseData = JSON.parse(JSON.stringify(poolData));
+                if (firebaseData.tickets) {
+                    firebaseData.tickets = firebaseData.tickets.map(t => {
+                        if (t.lines && Array.isArray(t.lines)) {
+                            // Convert array of arrays to object with indexed keys
+                            t.lines = Object.fromEntries(t.lines.map((line, i) => ['line' + i, line]));
+                        }
+                        return t;
+                    });
+                }
+                db.collection('lotteryPool').doc('main').set(firebaseData)
                     .then(() => console.log('Data saved to Firebase'))
                     .catch(err => console.error('Firebase save error:', err));
             }
@@ -1154,6 +1119,17 @@
                 console.log('Firebase doc exists:', doc.exists);
                 if (doc.exists) {
                     poolData = doc.data();
+                    // Convert lines from object back to array
+                    if (poolData.tickets) {
+                        poolData.tickets = poolData.tickets.map(t => {
+                            if (t.lines && typeof t.lines === 'object' && !Array.isArray(t.lines)) {
+                                // Convert object with keys like 'line0', 'line1' back to array
+                                const keys = Object.keys(t.lines).sort();
+                                t.lines = keys.map(k => t.lines[k]);
+                            }
+                            return t;
+                        });
+                    }
                     // Also save to localStorage for offline use
                     localStorage.setItem('lotteryPoolData', JSON.stringify(poolData));
                     localStorage.setItem('lotteryPoolDataVersion', DATA_VERSION);
@@ -1180,6 +1156,16 @@
             db.collection('lotteryPool').doc('main').onSnapshot((doc) => {
                 if (doc.exists) {
                     const newData = doc.data();
+                    // Convert lines from object back to array
+                    if (newData.tickets) {
+                        newData.tickets = newData.tickets.map(t => {
+                            if (t.lines && typeof t.lines === 'object' && !Array.isArray(t.lines)) {
+                                const keys = Object.keys(t.lines).sort();
+                                t.lines = keys.map(k => t.lines[k]);
+                            }
+                            return t;
+                        });
+                    }
                     // Only update if data changed (avoid loops)
                     if (JSON.stringify(newData) !== JSON.stringify(poolData)) {
                         poolData = newData;
@@ -1193,72 +1179,7 @@
             });
         }
 
-        function syncFromFile(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const fileData = JSON.parse(e.target.result);
-                    
-                    // Merge tickets from file into current data
-                    const existingIds = new Set(poolData.tickets.map(t => t.id));
-                    let newCount = 0;
-                    
-                    fileData.tickets.forEach(ticket => {
-                        if (!existingIds.has(ticket.id)) {
-                            poolData.tickets.push(ticket);
-                            newCount++;
-                        }
-                    });
-                    
-                    // Sort tickets by draw date
-                    poolData.tickets.sort((a, b) => new Date(a.drawDate) - new Date(b.drawDate));
-                    
-                    saveData();
-                    updateUI();
-                    
-                    const status = document.getElementById('syncStatus');
-                    status.style.display = 'block';
-                    status.style.background = '#10b981';
-                    status.style.color = 'white';
-                    status.innerHTML = `✓ Sync complete! Added ${newCount} new ticket(s). Your members and payments are preserved.`;
-                    
-                    setTimeout(() => { status.style.display = 'none'; }, 5000);
-                } catch (error) {
-                    const status = document.getElementById('syncStatus');
-                    status.style.display = 'block';
-                    status.style.background = '#ef4444';
-                    status.style.color = 'white';
-                    status.innerHTML = `✗ Error parsing file. Make sure it's a valid pool-data.json file.`;
-                    console.error('Sync error:', error);
-                }
-            };
-            
-            reader.readAsText(file);
-        }
 
-        function saveToFile() {
-            const dataStr = JSON.stringify(poolData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(dataBlob);
-            
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'pool-data.json';
-            link.click();
-            
-            URL.revokeObjectURL(url);
-            
-            const status = document.getElementById('syncStatus');
-            status.style.display = 'block';
-            status.style.background = '#667eea';
-            status.style.color = 'white';
-            status.innerHTML = '💾 Downloaded pool-data.json! <strong>Replace the existing file</strong> at:<br>/Users/joe/.openclaw/agents/mikuru/workspace/lottery-pool/pool-data.json';
-            
-            setTimeout(() => { status.style.display = 'none'; }, 8000);
-        }
 
         function exportData() {
             const dataStr = JSON.stringify(poolData, null, 2);
@@ -1281,55 +1202,7 @@
             setTimeout(() => { status.style.display = 'none'; }, 3000);
         }
 
-        function fullSyncFromFile(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            if (!confirm('This will REPLACE all your current data with the file contents. Continue?')) {
-                return;
-            }
-            
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const fileData = JSON.parse(e.target.result);
-                    
-                    // Validate required fields
-                    if (!fileData.members || !fileData.contributions || !fileData.tickets) {
-                        throw new Error('Invalid pool-data.json format');
-                    }
-                    
-                    // Replace all data
-                    poolData = fileData;
-                    saveData();
-                    updateUI();
-                    
-                    const status = document.getElementById('syncStatus');
-                    status.style.display = 'block';
-                    status.style.background = '#10b981';
-                    status.style.color = 'white';
-                    status.innerHTML = '✓ Full sync complete! All data replaced from file.';
-                    
-                    setTimeout(() => { status.style.display = 'none'; }, 5000);
-                } catch (error) {
-                    const status = document.getElementById('syncStatus');
-                    status.style.display = 'block';
-                    status.style.background = '#ef4444';
-                    status.style.color = 'white';
-                    status.innerHTML = '✗ Error: ' + error.message;
-                    console.error('Full sync error:', error);
-                }
-            };
-            
-            reader.readAsText(file);
-        }
 
-        function reloadFromEmbedded() {
-            if (confirm('This will clear your browser cache and reload the embedded data from the HTML file. Any unsaved changes will be lost. Continue?')) {
-                localStorage.removeItem('lotteryPoolData');
-                location.reload();
-            }
-        }
 
         // Load on start
         // Initialize
