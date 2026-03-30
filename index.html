@@ -214,6 +214,10 @@
         </div>
 
         <div id="overview" class="tab-content active">
+            <!-- Upcoming Draws Alert -->
+            <div id="upcomingDraws"></div>
+
+            <!-- Main Stats Grid -->
             <div class="stats">
                 <div class="stat-card">
                     <div class="stat-value" id="totalPool">$0</div>
@@ -233,8 +237,67 @@
                 </div>
             </div>
 
+            <!-- Performance Stats -->
             <div class="card">
-                <h2 style="margin-bottom: 15px;">Pool Members</h2>
+                <h2 style="margin-bottom: 15px;">📊 Performance</h2>
+                <div class="stats">
+                    <div class="stat-card" id="winRateCard">
+                        <div class="stat-value" id="winRate">0%</div>
+                        <div class="stat-label">Win Rate</div>
+                    </div>
+                    <div class="stat-card" id="roiCard">
+                        <div class="stat-value" id="roi">0%</div>
+                        <div class="stat-label">ROI</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="netProfit">$0</div>
+                        <div class="stat-label">Net Profit/Loss</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalWon">$0</div>
+                        <div class="stat-label">Total Won</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financial Breakdown -->
+            <div class="card">
+                <h2 style="margin-bottom: 15px;">💰 Financial Breakdown</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div style="background: white; padding: 15px; border-radius: 8px;">
+                        <div style="color: #666; font-size: 0.9em;">Total Contributions</div>
+                        <div style="font-size: 1.5em; font-weight: 700; color: #10b981;" id="totalContributions">$0</div>
+                    </div>
+                    <div style="background: white; padding: 15px; border-radius: 8px;">
+                        <div style="color: #666; font-size: 0.9em;">Spent from Contributions</div>
+                        <div style="font-size: 1.5em; font-weight: 700; color: #ef4444;" id="spentFromContributions">$0</div>
+                    </div>
+                    <div style="background: white; padding: 15px; border-radius: 8px;">
+                        <div style="color: #666; font-size: 0.9em;">Spent from Winnings</div>
+                        <div style="font-size: 1.5em; font-weight: 700; color: #f59e0b;" id="spentFromWinnings">$0</div>
+                    </div>
+                    <div style="background: white; padding: 15px; border-radius: 8px;">
+                        <div style="color: #666; font-size: 0.9em;">Free Plays</div>
+                        <div style="font-size: 1.5em; font-weight: 700; color: #667eea;" id="freePlays">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Member Contributions -->
+            <div class="card">
+                <h2 style="margin-bottom: 15px;">👥 Member Contributions</h2>
+                <div id="memberContributions"></div>
+            </div>
+
+            <!-- Recent Wins -->
+            <div class="card" id="recentWinsCard" style="display: none;">
+                <h2 style="margin-bottom: 15px;">🏆 Recent Wins</h2>
+                <div id="recentWins"></div>
+            </div>
+
+            <!-- Pool Members Balances -->
+            <div class="card">
+                <h2 style="margin-bottom: 15px;">💳 Member Balances</h2>
                 <div id="membersList"></div>
             </div>
         </div>
@@ -749,10 +812,15 @@
         function updateOverview() {
             // Calculate balances with participant support
             const balances = {};
-            poolData.members.forEach(m => balances[m.id] = 0);
+            const contributionsByMember = {};
+            poolData.members.forEach(m => {
+                balances[m.id] = 0;
+                contributionsByMember[m.id] = 0;
+            });
             
             poolData.contributions.forEach(c => {
                 balances[c.memberId] += c.amount;
+                contributionsByMember[c.memberId] += c.amount;
             });
             
             poolData.tickets.forEach(t => {
@@ -776,7 +844,7 @@
                 }
             });
 
-            // Update stats
+            // Update basic stats
             const totalBalance = Object.values(balances).reduce((sum, b) => sum + b, 0);
             document.getElementById('totalPool').textContent = '$' + totalBalance.toFixed(2);
             document.getElementById('totalTickets').textContent = poolData.tickets.length;
@@ -789,15 +857,88 @@
             const spentFromWinnings = poolData.tickets
                 .filter(t => t.fundedBy === 'winnings')
                 .reduce((sum, t) => sum + t.cost, 0);
+            const freePlayCount = poolData.tickets.filter(t => t.freePlay).length;
             document.getElementById('totalSpent').textContent = '$' + totalSpent.toFixed(2);
             document.getElementById('totalSpent').title = `From contributions: $${spentFromContributions.toFixed(2)} | From winnings: $${spentFromWinnings.toFixed(2)}`;
             
             // Update winnings pool
             const winningsAvailable = poolData.winnings ? poolData.winnings.availableForTickets : 0;
+            const totalWon = poolData.winnings ? poolData.winnings.totalWon : 0;
             document.getElementById('winningsPool').textContent = '$' + winningsAvailable.toFixed(2);
             document.getElementById('winningsCard').style.display = poolData.winnings ? 'block' : 'none';
+            
+            // Calculate performance stats
+            const winningTickets = poolData.tickets.filter(t => t.won);
+            const winRate = poolData.tickets.length > 0 ? (winningTickets.length / poolData.tickets.length) * 100 : 0;
+            const netProfit = totalWon - totalSpent;
+            const roi = totalSpent > 0 ? ((totalWon - totalSpent) / totalSpent) * 100 : 0;
+            
+            document.getElementById('winRate').textContent = winRate.toFixed(1) + '%';
+            document.getElementById('roi').textContent = roi.toFixed(1) + '%';
+            document.getElementById('roi').style.color = roi >= 0 ? '#10b981' : '#ef4444';
+            document.getElementById('netProfit').textContent = (netProfit >= 0 ? '+' : '-') + '$' + Math.abs(netProfit).toFixed(2);
+            document.getElementById('netProfit').style.color = netProfit >= 0 ? '#10b981' : '#ef4444';
+            document.getElementById('totalWon').textContent = '$' + totalWon.toFixed(2);
+            
+            // Update financial breakdown
+            const totalContributions = poolData.contributions.reduce((sum, c) => sum + c.amount, 0);
+            document.getElementById('totalContributions').textContent = '$' + totalContributions.toFixed(2);
+            document.getElementById('spentFromContributions').textContent = '$' + spentFromContributions.toFixed(2);
+            document.getElementById('spentFromWinnings').textContent = '$' + spentFromWinnings.toFixed(2);
+            document.getElementById('freePlays').textContent = freePlayCount;
+            
+            // Update member contributions
+            const memberContributionsDiv = document.getElementById('memberContributions');
+            memberContributionsDiv.innerHTML = poolData.members.map(m => {
+                const contributed = contributionsByMember[m.id] || 0;
+                const shareOfCosts = (contributionsByMember[m.id] || 0) - balances[m.id];
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: white; border-radius: 8px; margin-bottom: 8px;">
+                        <div>
+                            <strong>${m.name}</strong>
+                            <div style="font-size: 0.85em; color: #666;">Contributed: $${contributed.toFixed(2)} | Share of costs: $${shareOfCosts.toFixed(2)}</div>
+                        </div>
+                        <div style="font-weight: 700; color: ${balances[m.id] >= 0 ? '#10b981' : '#ef4444'};">
+                            ${balances[m.id] >= 0 ? '+' : '-'}$${Math.abs(balances[m.id]).toFixed(2)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Update recent wins
+            const recentWins = poolData.tickets
+                .filter(t => t.won)
+                .sort((a, b) => new Date(b.drawDate) - new Date(a.drawDate))
+                .slice(0, 5);
+            
+            const recentWinsCard = document.getElementById('recentWinsCard');
+            const recentWinsDiv = document.getElementById('recentWins');
+            
+            if (recentWins.length > 0) {
+                recentWinsCard.style.display = 'block';
+                recentWinsDiv.innerHTML = recentWins.map(t => {
+                    const gameName = t.game === 'lotto-max' ? 'Lotto Max' : 'Lotto 6/49';
+                    const prizeInfo = t.prizeType || (t.prizeAmount ? `$${t.prizeAmount.toFixed(2)}` : 'Win');
+                    return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: white; border-radius: 8px; margin-bottom: 8px;">
+                            <div>
+                                <strong>🎉 ${gameName}</strong>
+                                <div style="font-size: 0.85em;">${t.drawDate} - ${prizeInfo}</div>
+                            </div>
+                            <div style="font-weight: 700; font-size: 1.2em;">
+                                ${t.prizeAmount ? '$' + t.prizeAmount.toFixed(2) : 'Free Play'}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                recentWinsCard.style.display = 'none';
+            }
+            
+            // Update upcoming draws
+            updateUpcomingDraws();
 
-            // Update members list
+            // Update members list (balances only)
             const membersList = document.getElementById('membersList');
             membersList.innerHTML = poolData.members.map(m => {
                 const balance = balances[m.id];
@@ -809,6 +950,54 @@
                         <div class="member-balance ${balanceClass}">${balanceText}</div>
                     </div>
                 `;
+            }).join('');
+        }
+        
+        function updateUpcomingDraws() {
+            const upcomingDrawsDiv = document.getElementById('upcomingDraws');
+            const threshold = poolData.settings.jackpotThreshold;
+            
+            if (!poolData.draws || poolData.draws.length === 0) {
+                upcomingDrawsDiv.innerHTML = '';
+                return;
+            }
+            
+            // Sort by date, upcoming first
+            const upcoming = poolData.draws
+                .filter(d => new Date(d.date) >= new Date(new Date().toDateString()))
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            if (upcoming.length === 0) {
+                upcomingDrawsDiv.innerHTML = '';
+                return;
+            }
+            
+            upcomingDrawsDiv.innerHTML = upcoming.map(d => {
+                const gameName = d.game === 'lotto-max' ? 'Lotto Max' : 'Lotto 6/49';
+                const jackpotM = (d.jackpot / 1000000).toFixed(0);
+                const isAboveThreshold = d.jackpot >= threshold;
+                const alertClass = isAboveThreshold ? 'jackpot-alert' : '';
+                const statusText = isAboveThreshold ? '🔥 ABOVE THRESHOLD!' : 'Below threshold';
+                const maxmillionsText = d.maxmillions ? ` + ${d.maxmillions} MaxMillions` : '';
+                const goldBallText = d.goldBall ? ' (Gold Ball)' : '';
+                const daysUntil = Math.ceil((new Date(d.date) - new Date()) / (1000 * 60 * 60 * 24));
+                const daysText = daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`;
+                
+                if (isAboveThreshold) {
+                    return `
+                        <div class="jackpot-alert">
+                            <div style="font-size: 1.3em;">🎰 ${gameName} - $${jackpotM}M${maxmillionsText}${goldBallText}</div>
+                            <div style="font-size: 0.9em; margin-top: 5px;">${d.date} (${daysText}) - ${statusText}</div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div style="background: #f3f4f6; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: center;">
+                            <div style="font-weight: 600; color: #374151;">${gameName} - $${jackpotM}M${maxmillionsText}${goldBallText}</div>
+                            <div style="font-size: 0.9em; color: #666; margin-top: 5px;">${d.date} (${daysText}) - ${statusText}</div>
+                        </div>
+                    `;
+                }
             }).join('');
         }
 
